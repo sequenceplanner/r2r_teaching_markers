@@ -104,12 +104,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
     marker.mesh_resource = mesh_path;
-    // marker.mesh_use_embedded_materials = true;
-
-    // let mut mesh = MeshFile::default();
-    // mesh.filename = mesh_path;
-    // mesh.
-    // marker.mesh_file = mesh;
 
     let server = TeachingMarkerServer::new("teaching_markers", arc_node_clone);
 
