@@ -741,12 +741,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "r2r_regular_markers"
+version = "0.0.1"
+source = "git+https://github.com/sequenceplanner/r2r_regular_markers?tag=v0.0.2#a5193831b48b42d8a25101a8ff859a07907059b7"
+dependencies = [
+ "futures",
+ "r2r",
+ "tokio",
+]
+
+[[package]]
 name = "r2r_teaching_markers"
 version = "0.0.1"
 dependencies = [
  "crossbeam",
  "r2r",
  "r2r_interactive_markers",
+ "r2r_regular_markers",
  "tokio",
 ]
 

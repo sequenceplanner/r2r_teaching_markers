@@ -1,11 +1,12 @@
 use r2r::std_msgs::msg::Header;
 use r2r::tf2_msgs::msg::TFMessage;
+use r2r::visualization_msgs::msg::Marker;
 use r2r::Context;
-use r2r_teaching_markers::TeachingMarker;
+use r2r_teaching_markers::TeachingMarkerServer;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use r2r::QosProfile;
-use r2r::geometry_msgs::msg::{Transform, TransformStamped};
+use r2r::geometry_msgs::msg::{Point, Pose, Quaternion, Transform, TransformStamped};
 
 pub static NODE_ID: &'static str = "simple_marker";
 
@@ -73,11 +74,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
     });
 
+    // Add an optional marker inside the teaching controls
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set");
+    let mesh_path = format!("file://{}/mesh/3DBenchy.stl", manifest_dir);
+ 
+    let mut marker = Marker::default();
+    marker.action = 0 as i32;
+    marker.type_ = Marker::MESH_RESOURCE as i32;
+    marker.header.frame_id = "teaching_marker".to_string();
+
+    marker.scale.x = 0.004;
+    marker.scale.y = 0.004;
+    marker.scale.z = 0.004;
+    marker.color.r = 0.8;
+    marker.color.b = 0.1;
+    marker.color.g = 0.1;
+    marker.color.a = 1.0;
+    marker.pose = Pose {
+        position: Point {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        orientation: Quaternion {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            w: 1.0,
+        },
+    };
+    marker.mesh_resource = mesh_path;
+    // marker.mesh_use_embedded_materials = true;
+
+    // let mut mesh = MeshFile::default();
+    // mesh.filename = mesh_path;
+    // mesh.
+    // marker.mesh_file = mesh;
+
+    let server = TeachingMarkerServer::new("teaching_markers", arc_node_clone);
+
     let arc_node_clone = arc_node.clone();
-    TeachingMarker::new(
+    server.insert(
         "teaching_marker".to_string(),
         "base_link".to_string(),
-        arc_node_clone
+        Some(marker),
+        // None,
+        arc_node_clone,
+    );
+
+    let arc_node_clone = arc_node.clone();
+    server.insert(
+        "teaching_marker_2".to_string(),
+        "base_link".to_string(),
+        // Some(marker),
+        None,
+        arc_node_clone,
     );
 
     // Keep the node alive

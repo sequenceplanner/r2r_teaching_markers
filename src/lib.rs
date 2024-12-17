@@ -3,10 +3,11 @@ use r2r::geometry_msgs::msg::{Point, Pose, Quaternion, Transform, TransformStamp
 use r2r::std_msgs::msg::Header;
 use r2r::tf2_msgs::msg::TFMessage;
 use r2r::visualization_msgs::msg::{
-    InteractiveMarker, InteractiveMarkerControl, InteractiveMarkerFeedback,
+    InteractiveMarker, InteractiveMarkerControl, InteractiveMarkerFeedback, Marker,
 };
-use r2r::QosProfile; 
+use r2r::QosProfile;
 use r2r_interactive_markers::InteractiveMarkerServer;
+use r2r_regular_markers::RegularMarkerServer;
 use std::sync::{Arc, Mutex};
 
 /// Node identifier
@@ -17,8 +18,11 @@ const DEFAULT_FEEDBACK_CB: u8 = 255;
 
 #[derive(Clone)]
 /// A struct representing a teaching marker in the interactive marker server.
-pub struct TeachingMarker {
-    // Fields can be added here if needed
+pub struct TeachingMarkerServer {
+    // markers: Vec<Markers>,
+    interactive_marker_server: InteractiveMarkerServer,
+    regular_marker_server: RegularMarkerServer
+        // More fields can be added here if needed
 }
 
 #[derive(PartialEq)]
@@ -57,7 +61,12 @@ fn normalize_quaternion(quaternion: &mut Quaternion) {
 /// # Returns
 ///
 /// An `InteractiveMarkerControl` configured with the given parameters.
-fn prepare_control(name: &str, interaction_mode: u8, axis: Axis) -> InteractiveMarkerControl {
+fn prepare_control(
+    name: &str,
+    interaction_mode: u8,
+    axis: Axis,
+    // marker: Option<Marker>,
+) -> InteractiveMarkerControl {
     let mut control = InteractiveMarkerControl::default();
     control.orientation = Quaternion {
         w: 1.0,
@@ -69,31 +78,39 @@ fn prepare_control(name: &str, interaction_mode: u8, axis: Axis) -> InteractiveM
     normalize_quaternion(&mut control.orientation);
     control.name = name.to_string();
     control.interaction_mode = interaction_mode;
+    // if let Some(marker) = marker {
+    //     control.markers.push(marker);
+    // }
     control
 }
 
-impl TeachingMarker {
-    /// Creates a new `TeachingMarker` and sets it up in the interactive marker server.
+impl TeachingMarkerServer {
+    /// Creates a new `TeachingMarkerServer`.
     ///
     /// # Arguments
     ///
-    /// * `name` - The name of the marker.
-    /// * `spawn_at` - The frame ID where the marker is to be spawned.
+    /// * `name` - A topic namespace for the teaching marker server.
     /// * `node` - A shared reference to the ROS node.
     ///
     /// # Remarks
     ///
-    /// This function initializes the interactive marker server, sets up publishers,
-    /// and handles the feedback from the interactive marker.
-    pub fn new(name: String, spawn_at: String, node: Arc<Mutex<r2r::Node>>) {
-        // Clone the node for use in the closure
-        let arc_node_clone = node.clone();
+    /// This function initializes the interactive marker server and sets up publishers.
+    pub fn new(name: &str, node: Arc<Mutex<r2r::Node>>) -> Self {
 
+        let arc_node_clone = node.clone();
+        let interactive_marker_server = InteractiveMarkerServer::new(name, arc_node_clone);
+        let arc_node_clone = node.clone();
+        let regular_marker_server = RegularMarkerServer::new("teaching_marker_server", name, arc_node_clone);
+
+        TeachingMarkerServer {
+            interactive_marker_server,
+            regular_marker_server
+        }
+    }
+
+    pub fn insert(&self, name: String, spawn_at: String, regular_marker: Option<Marker>, node: Arc<Mutex<r2r::Node>>) {
         // Create the interactive marker
         let marker = Self::create_marker(&name, &spawn_at);
-
-        // Initialize the interactive marker server
-        let server = InteractiveMarkerServer::new("teaching_markers", arc_node_clone);
 
         // Set up a publisher for the TF messages with transient local QoS
         let arc_node_clone = node.clone();
@@ -106,6 +123,16 @@ impl TeachingMarker {
             )
             .unwrap();
 
+        // Publish the initial transform before waiting for the feedback from RViz
+        let mut init_transform = TransformStamped::default();
+        init_transform.child_frame_id = name.to_string();
+        init_transform.header.frame_id = spawn_at.to_string();
+        publisher.publish(
+            &TFMessage { transforms: vec!(
+                init_transform
+            ) }
+        ).unwrap();
+
         // Create an unbounded channel for communication
         let (tx, rx) = unbounded();
 
@@ -117,7 +144,7 @@ impl TeachingMarker {
         });
 
         // Insert the marker into the server
-        server.insert(marker);
+        self.interactive_marker_server.insert(marker);
 
         // Clone variables for the feedback callback
         let name_clone = name.clone();
@@ -130,10 +157,17 @@ impl TeachingMarker {
         });
 
         // Set the feedback callback for the marker
-        server.set_callback(&name, Some(feedback_cb.clone()), DEFAULT_FEEDBACK_CB);
+        self.interactive_marker_server.set_callback(&name, Some(feedback_cb.clone()), DEFAULT_FEEDBACK_CB);
 
         // Apply changes to publish updates
-        server.apply_changes();
+        self.interactive_marker_server.apply_changes();
+
+        // If a marker is provided visualize it
+        if let Some(marker) = regular_marker {
+            self.regular_marker_server.insert(&name, marker);
+            self.regular_marker_server.apply_changes();
+        }
+
     }
 
     /// Creates an `InteractiveMarker` with controls for rotation and translation along all axes.
@@ -147,12 +181,12 @@ impl TeachingMarker {
     ///
     /// An `InteractiveMarker` configured with controls.
     fn create_marker(name: &str, spawn_at: &str) -> InteractiveMarker {
-        let mut marker = InteractiveMarker::default();
-        marker.header.frame_id = spawn_at.to_string();
-        marker.name = format!("{name}");
-        marker.description = format!("{name}");
-        marker.scale = 0.3;
-        marker.pose = Pose {
+        let mut int_marker = InteractiveMarker::default();
+        int_marker.header.frame_id = spawn_at.to_string();
+        int_marker.name = format!("{name}");
+        int_marker.description = format!("{name}");
+        int_marker.scale = 0.3;
+        int_marker.pose = Pose {
             position: Point {
                 x: 0.0,
                 y: 0.0,
@@ -187,12 +221,14 @@ impl TeachingMarker {
             ),
             ("move_z", InteractiveMarkerControl::MOVE_AXIS as u8, Axis::Z),
         ] {
-            marker
-                .controls
-                .push(prepare_control(name, interaction_mode, axis))
+            int_marker.controls.push(prepare_control(
+                name,
+                interaction_mode,
+                axis,
+            ))
         }
 
-        marker
+        int_marker
     }
 
     /// Processes feedback from the interactive marker and generates a TF message.
@@ -247,4 +283,5 @@ impl TeachingMarker {
 
         TFMessage { transforms }
     }
+
 }
