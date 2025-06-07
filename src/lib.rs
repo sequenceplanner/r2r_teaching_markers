@@ -110,7 +110,7 @@ impl TeachingMarkerServer {
 
     pub fn insert(&self, name: String, spawn_at: String, spawn_at_pose: Option<Pose>, regular_marker: Option<Marker>, node: Arc<Mutex<r2r::Node>>) {
         // Create the interactive marker
-        let marker = Self::create_marker(&name, &spawn_at, spawn_at_pose);
+        let marker = Self::create_marker(&name, &spawn_at, spawn_at_pose.clone());
 
         // Set up a publisher for the TF messages with transient local QoS
         let arc_node_clone = node.clone();
@@ -124,7 +124,27 @@ impl TeachingMarkerServer {
             .unwrap();
 
         // Publish the initial transform before waiting for the feedback from RViz
-        let mut init_transform = TransformStamped::default();
+        // let mut init_transform = TransformStamped::default();
+        let mut init_transform = match spawn_at_pose {
+            Some(p) => {
+                let mut t = TransformStamped::default();
+                t.transform = Transform {
+                    translation: Vector3 { 
+                        x: p.position.x, 
+                        y: p.position.y, 
+                        z: p.position.z 
+                    },
+                    rotation: Quaternion { 
+                        x: p.orientation.x, 
+                        y: p.orientation.y, 
+                        z: p.orientation.z, 
+                        w: p.orientation.w 
+                    },
+                };
+                t
+            },
+            None => TransformStamped::default()
+        };
         init_transform.child_frame_id = name.to_string();
         init_transform.header.frame_id = spawn_at.to_string();
         publisher.publish(
