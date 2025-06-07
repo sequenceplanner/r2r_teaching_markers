@@ -108,9 +108,9 @@ impl TeachingMarkerServer {
         }
     }
 
-    pub fn insert(&self, name: String, spawn_at: String, regular_marker: Option<Marker>, node: Arc<Mutex<r2r::Node>>) {
+    pub fn insert(&self, name: String, spawn_at: String, spawn_at_pose: Option<Pose>, regular_marker: Option<Marker>, node: Arc<Mutex<r2r::Node>>) {
         // Create the interactive marker
-        let marker = Self::create_marker(&name, &spawn_at);
+        let marker = Self::create_marker(&name, &spawn_at, spawn_at_pose);
 
         // Set up a publisher for the TF messages with transient local QoS
         let arc_node_clone = node.clone();
@@ -176,30 +176,34 @@ impl TeachingMarkerServer {
     ///
     /// * `name` - The name of the marker.
     /// * `spawn_at` - The frame ID where the marker is to be spawned.
+    /// * `spawn_at_pose` - The pose where we want to spawn the item at.
     ///
     /// # Returns
     ///
     /// An `InteractiveMarker` configured with controls.
-    fn create_marker(name: &str, spawn_at: &str) -> InteractiveMarker {
+    fn create_marker(name: &str, spawn_at: &str, spawn_at_pose: Option<Pose>) -> InteractiveMarker {
         let mut int_marker = InteractiveMarker::default();
         int_marker.header.frame_id = spawn_at.to_string();
         int_marker.name = format!("{name}");
         int_marker.description = format!("{name}");
         int_marker.scale = 0.3;
-        int_marker.pose = Pose {
-            position: Point {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-            },
-            orientation: Quaternion {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
-                w: 1.0,
-            },
-        };
-
+        int_marker.pose = match spawn_at_pose {
+            Some(pose ) => pose,
+            None => Pose {
+                position: Point {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                orientation: Quaternion {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                    w: 1.0,
+                },
+            }
+        }; 
+        
         // Add controls for rotation and movement along each axis
         for (name, interaction_mode, axis) in [
             (

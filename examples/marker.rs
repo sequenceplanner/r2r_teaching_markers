@@ -111,8 +111,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server.insert(
         "teaching_marker".to_string(),
         "base_link".to_string(),
+        None,
         Some(marker),
-        // None,
         arc_node_clone,
     );
 
@@ -120,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server.insert(
         "teaching_marker_2".to_string(),
         "base_link".to_string(),
-        // Some(marker),
+        None,
         None,
         arc_node_clone,
     );
